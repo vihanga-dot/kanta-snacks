@@ -224,20 +224,24 @@ function displayProducts(productGroups) {
         `;
     }).join('');
 
-    // Add event listeners for image error handling after DOM is updated
+    // Reveal images after they decode; cached images are handled immediately too.
     setTimeout(() => {
         document.querySelectorAll('.product-img').forEach(img => {
+            const markImageLoaded = () => img.classList.add('is-loaded');
             img.addEventListener('error', function() {
                 if (this.parentElement && this.parentElement.classList) {
                     this.parentElement.classList.add('with-fallback');
                 }
+                this.classList.add('is-loaded');
             });
 
             img.addEventListener('load', function() {
+                markImageLoaded();
                 if (this.parentElement && this.parentElement.classList) {
                     this.parentElement.classList.remove('with-fallback');
                 }
             });
+            if (img.complete) markImageLoaded();
         });
     }, 100);
 }

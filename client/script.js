@@ -1,12 +1,53 @@
-// Product Data - loaded from JSON file
+// Product Data - loaded from the owner-managed catalog, with the static JSON as a safe fallback.
 let products = [];
+
+async function fetchPublicProcedure(path) {
+    const input = encodeURIComponent(JSON.stringify({ 0: { json: null } }));
+    const response = await fetch(`/api/trpc/${path}?batch=1&input=${input}`, { headers: { Accept: 'application/json' } });
+    if (!response.ok) throw new Error(`Catalog request failed: ${response.status}`);
+    const payload = await response.json();
+    const data = payload?.[0]?.result?.data;
+    return data?.json ?? data;
+}
 
 async function loadProducts() {
     try {
-        const response = await fetch('products.json');
-        products = await response.json();
+        const catalog = await fetchPublicProcedure('catalog.publicList');
+        if (!Array.isArray(catalog)) throw new Error('Catalog response was not a list');
+        products = catalog.map(product => ({ ...product, image: product.image || product.imageUrl }));
     } catch (error) {
-        console.error('Error loading products:', error);
+        console.warn('Using static catalog fallback:', error);
+        try {
+            const response = await fetch('/products.json');
+            products = await response.json();
+        } catch (fallbackError) {
+            console.error('Error loading products:', fallbackError);
+            products = [];
+        }
+    }
+}
+
+async function loadSiteSettings() {
+    try {
+        const settings = await fetchPublicProcedure('catalog.publicSettings');
+        if (!settings) return;
+        const announcement = document.querySelector('.announcement');
+        if (announcement && settings.announcement) announcement.textContent = settings.announcement;
+        const heroSlides = document.querySelectorAll('.hero-slide');
+        if (heroSlides[0]) {
+            const title = heroSlides[0].querySelector('h1');
+            const subtitle = heroSlides[0].querySelector('p');
+            if (title && settings.heroTitle) title.textContent = settings.heroTitle;
+            if (subtitle && settings.heroSubtitle) subtitle.textContent = settings.heroSubtitle;
+        }
+        if (heroSlides[1]) {
+            const title = heroSlides[1].querySelector('h1');
+            const subtitle = heroSlides[1].querySelector('p');
+            if (title && settings.aboutTitle) title.textContent = settings.aboutTitle;
+            if (subtitle && settings.aboutBody) subtitle.textContent = settings.aboutBody;
+        }
+    } catch (error) {
+        console.warn('Using static site copy fallback:', error);
     }
 }
 
@@ -555,8 +596,7 @@ function startAutoSlide() {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async function() {
-    // Load products from JSON file
-    await loadProducts();
+    await Promise.all([loadProducts(), loadSiteSettings()]);
 
     // Add scroll animation to navbar
     window.addEventListener('scroll', function() {
